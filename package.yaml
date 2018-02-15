@@ -1,0 +1,45 @@
+name: mittens
+version: '0.1.0.0'
+category: Web
+author: Author name here
+maintainer: example@example.com
+copyright: 2018 Author name here
+license: BSD3
+github: githubuser/mittens
+extra-source-files:
+- README.md
+library:
+  source-dirs: src
+  dependencies:
+  - base >=4.7 && <5
+executables:
+  mittens:
+    main: Main.hs
+    source-dirs: app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - base
+    - resource-pool
+    - mysql-simple
+    - mysql
+    - exceptions
+    - async
+    - text
+    - mittens
+    - optparse-simple
+tests:
+  mittens-test:
+    main: Spec.hs
+    source-dirs: test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - base
+    - mittens
+    - hspec
+    - QuickCheck
