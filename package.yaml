@@ -30,6 +30,7 @@ executables:
     - text
     - mittens
     - optparse-simple
+    - time
 tests:
   mittens-test:
     main: Spec.hs

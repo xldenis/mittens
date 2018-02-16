@@ -16,8 +16,11 @@ import Database.MySQL.Simple
 import Database.MySQL.Simple.Types
 
 import Data.Monoid
+import Data.Time.Clock
+import Control.Concurrent
 
 import Options.Applicative.Simple
+import Control.Monad
 type SQLText = Text
 
 data CLI = CLI
@@ -41,10 +44,11 @@ main = do
   sourcePool <- createPool (connect $ mkConnectInfo sourceDB) close 1 2 1
   targetPool <- createPool (connect $ mkConnectInfo targetDB) close 1 2 5
 
-  queries <- withResource sourcePool getQueries
+  repeatingEvery 5 $ do
+    queries <- withResource sourcePool getQueries
 
-  print queries
-  mapConcurrently_ (\q -> withResource targetPool $ \conn -> runQuery conn q) queries
+    print queries
+    mapConcurrently_ (\q -> withResource targetPool $ \conn -> runQuery conn q) queries
 
 getQueries :: Connection -> IO [Query]
 getQueries conn  = do
@@ -76,3 +80,15 @@ runQuery conn text =
     Base.freeResult result
 
     return ()
+
+repeatingEvery :: NominalDiffTime -> IO () -> IO ()
+repeatingEvery time action = do
+  current <- getCurrentTime
+  action
+  updated <- getCurrentTime
+
+  let diff = diffUTCTime updated current
+
+  when (time - diff > 0) $ threadDelay (floor $ 10^6 * (time - diff))
+
+  repeatingEvery time action

@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5260fe34c3574b3155f2ba480afed255b0d2ba65bfa6b17919b3eaa7ca17b5ae
+-- hash: 1727398ab9b6ecf109e88e38d0bd5d2b6ad8a054ed743098e4a2f5a9e2931e48
 
 name:           mittens
 version:        0.1.0.0
@@ -48,6 +48,7 @@ executable mittens
     , optparse-simple
     , resource-pool
     , text
+    , time
   other-modules:
       Paths_mittens
   default-language: Haskell2010
