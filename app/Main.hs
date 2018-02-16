@@ -5,7 +5,6 @@ module Main where
 import           Data.Maybe
 import           Data.Pool
 import           Data.String                 (fromString)
-import           Data.Text                   (Text)
 import           Data.Word
 
 import           Control.Concurrent.Async
@@ -21,7 +20,8 @@ import           Data.Time.Clock
 
 import           Control.Monad
 import           Options.Applicative.Simple
-type SQLText = Text
+import           Data.List
+import           Data.Char
 
 data CLI = CLI
   { host     :: String
@@ -53,7 +53,17 @@ main = do
 getQueries :: Connection -> IO [Query]
 getQueries conn  = do
   (results :: [Only (Maybe String)]) <- query_ conn "select sql_text from performance_schema.events_statements_history"
-  return $ map fromString $ mapMaybe fromOnly results
+  let queries = mapMaybe fromOnly results
+      readQueries = filter isReadQuery queries
+
+  return $ map fromString readQueries
+
+
+-- | Shitty filter to identify read only queries, for now assume all selects are read-only.
+isReadQuery :: String -> Bool
+isReadQuery str =
+  isPrefixOf "select" (map toLower str) &&
+  not (isSuffixOf "..." str)
 
 mkConnectInfo :: CLI -> ConnectInfo
 mkConnectInfo cli =
