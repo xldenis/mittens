@@ -58,7 +58,6 @@ getQueries conn  = do
 
   return $ map fromString readQueries
 
-
 -- | Shitty filter to identify read only queries, for now assume all selects are read-only.
 isReadQuery :: String -> Bool
 isReadQuery str =

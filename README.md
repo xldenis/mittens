@@ -1,3 +1,3 @@
-# mittens
+# mittens: keeping mysql warm
 
-add description of mittens here
+it _is_ cold out
