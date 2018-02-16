@@ -1,26 +1,26 @@
-{-# LANGUAGE ScopedTypeVariables, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
-import Data.Pool
-import Data.Text (Text)
-import Data.Maybe
-import Data.String (fromString)
-import Data.Word
-import Data.Maybe
+import           Data.Maybe
+import           Data.Pool
+import           Data.String                 (fromString)
+import           Data.Text                   (Text)
+import           Data.Word
 
-import Control.Exception
-import Control.Concurrent.Async
+import           Control.Concurrent.Async
+import           Control.Exception
 
-import qualified Database.MySQL.Base as Base
-import Database.MySQL.Simple
-import Database.MySQL.Simple.Types
+import qualified Database.MySQL.Base         as Base
+import           Database.MySQL.Simple
+import           Database.MySQL.Simple.Types
 
-import Data.Monoid
-import Data.Time.Clock
-import Control.Concurrent
+import           Control.Concurrent
+import           Data.Monoid
+import           Data.Time.Clock
 
-import Options.Applicative.Simple
-import Control.Monad
+import           Control.Monad
+import           Options.Applicative.Simple
 type SQLText = Text
 
 data CLI = CLI
@@ -53,7 +53,7 @@ main = do
 getQueries :: Connection -> IO [Query]
 getQueries conn  = do
   (results :: [Only (Maybe String)]) <- query_ conn "select sql_text from performance_schema.events_statements_history"
-  return $ map fromString $ catMaybes $ map fromOnly results
+  return $ map fromString $ mapMaybe fromOnly results
 
 mkConnectInfo :: CLI -> ConnectInfo
 mkConnectInfo cli =
