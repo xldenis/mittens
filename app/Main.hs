@@ -42,17 +42,23 @@ main = do
   (sourceDB, targetDB) <- execParser (info ((,) <$> cliParser "source-" <*> cliParser "dest-") fullDesc)
 
   sourcePool <- createPool (connect $ mkConnectInfo sourceDB) close 1 2 1
-  targetPool <- createPool (connect $ mkConnectInfo targetDB) close 1 2 5
+  targetPool <- createPool (connect $ mkConnectInfo targetDB) close 1 15 10
 
-  repeatingEvery 5 $ do
-    queries <- withResource sourcePool getQueries
-
-    print queries
+  repeatingEvery 1 $ do
+    queries <- withResource sourcePool (getQueries $ database sourceDB)
+    putStrLn $ "Fetched " ++ show (length queries) ++ " queries from " ++ host sourceDB ++ " db " ++ database sourceDB
     mapConcurrently_ (\q -> withResource targetPool $ \conn -> runQuery conn q) queries
 
-getQueries :: Connection -> IO [Query]
-getQueries conn  = do
-  (results :: [Only (Maybe String)]) <- query_ conn "select sql_text from performance_schema.events_statements_history"
+getQueries :: String -> Connection -> IO [Query]
+getQueries dbName conn = do
+  (results :: [Only (Maybe String)]) <- query conn
+    "select sql_text \
+    \from performance_schema.events_statements_history as esh \
+    \join performance_schema.threads on threads.thread_id = esh.thread_id \
+    \where type='foreground' and current_schema = ? and processlist_id != connection_id() \
+    \and event_name='statement/sql/select';"
+    (Only dbName)
+
   let queries = mapMaybe fromOnly results
       readQueries = filter isReadQuery queries
 
@@ -76,10 +82,12 @@ mkConnectInfo cli =
 
 runQuery :: Connection -> Query -> IO ()
 runQuery conn text =
-  doQuery `catch` \(_ :: FormatError) -> logError
-          `catch` \(_ :: QueryError)  -> logError
-          `catch` \(_ :: ResultError) -> logError
-
+  doQuery `catches`
+    [ Handler $ \(_ :: FormatError) -> logError
+    , Handler $ \(_ :: QueryError)  -> logError
+    , Handler $ \(_ :: ResultError) -> logError
+    , Handler $ \(e :: Base.MySQLError)  -> putStrLn $ "Hit an invalid query: " <> show (fromQuery text) <> show e
+    ]
   where
   logError = putStrLn "omg an error happened!!!"
   doQuery = do
@@ -97,6 +105,8 @@ repeatingEvery time action = do
   updated <- getCurrentTime
 
   let diff = diffUTCTime updated current
+
+  putStrLn $ "Queries were replicated in " ++ show diff ++ " seconds."
 
   when (time - diff > 0) $ threadDelay (floor $ 10^6 * (time - diff))
 

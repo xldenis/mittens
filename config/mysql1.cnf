@@ -1,0 +1,4 @@
+[mysqld]
+server-id=1
+log-error=/var/log/mysql/mysql.err
+log-bin = /var/log/mysql/mysql-replication.log

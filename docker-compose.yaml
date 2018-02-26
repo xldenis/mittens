@@ -1,0 +1,19 @@
+version: '3'
+services:
+  mysql1:
+    image: mysql
+    environment:
+    - MYSQL_ROOT_PASSWORD=weak
+    volumes:
+    - ${PWD}/config/mysql1.cnf:/etc/mysql/mysql.conf.d/mysql1.cnf
+    ports:
+    - 5000:3306
+  mysql2:
+    image: mysql
+    environment:
+    - MYSQL_ROOT_PASSWORD=weak
+    ports:
+    - 3000:3306
+
+    volumes:
+    - ${PWD}/config/mysql2.cnf:/etc/mysql/mysql.conf.d/mysql2.cnf
