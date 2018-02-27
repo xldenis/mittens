@@ -3,7 +3,7 @@ services:
   mysql1:
     image: mysql
     environment:
-    - MYSQL_ROOT_PASSWORD=weak
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
     volumes:
     - ${PWD}/config/mysql1.cnf:/etc/mysql/mysql.conf.d/mysql1.cnf
     ports:
@@ -11,7 +11,8 @@ services:
   mysql2:
     image: mysql
     environment:
-    - MYSQL_ROOT_PASSWORD=weak
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+
     ports:
     - 3000:3306
 
