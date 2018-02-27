@@ -33,6 +33,7 @@ executables:
     - fast-logger
     - bytestring
     - unliftio
+    - unliftio-core
 tests:
   mittens-test:
     main: Spec.hs

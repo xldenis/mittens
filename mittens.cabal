@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ceebd998aa5df152c70c047999fa1560fa1dfe7fa1f604f525cca33f5a3cca46
+-- hash: 0990ac947ae32978b83fbe036b0158a147d6c9b62e307c58a8a9c0cb62bc035e
 
 name:           mittens
 version:        0.1.0.0
@@ -51,6 +51,7 @@ executable mittens
     , text
     , time
     , unliftio
+    , unliftio-core
   other-modules:
       Logger
       Paths_mittens

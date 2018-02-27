@@ -27,6 +27,7 @@ import           Options.Applicative.Simple
 import           Control.Monad.IO.Class
 import           Control.Monad.Logger
 
+import           Control.Monad.IO.Unlift
 import           Logger
 
 data DBOpts = DB
@@ -100,17 +101,17 @@ mkConnectInfo cli =
     , connectDatabase = database cli
     }
 
-runQuery :: MonadIO m => Connection -> Query -> m ()
-runQuery conn text = liftIO $
+runQuery :: (MonadIO m, MonadUnliftIO m, MonadLogger m) => Connection -> Query -> m ()
+runQuery conn text =
   doQuery `catches`
-    [ Handler $ \(_ :: FormatError) -> logError
-    , Handler $ \(_ :: QueryError)  -> logError
-    , Handler $ \(_ :: ResultError) -> logError
-    , Handler $ \(e :: Base.MySQLError)  -> putStrLn $ "Hit an invalid query: " <> show (fromQuery text) <> show e
+    [ Handler $ \(e :: FormatError) -> logError (show e)
+    , Handler $ \(e :: QueryError)  -> logError (show e)
+    , Handler $ \(e :: ResultError) -> logError (show e)
+    , Handler $ \(e :: Base.MySQLError)  -> logErrorN . fromString $ "Hit an invalid query: " <> show e
     ]
   where
-  logError = putStrLn "omg an error happened!!!"
-  doQuery = do
+  logError e = logErrorN . fromString $ "omg an error happened!!! " <> e
+  doQuery = liftIO $ do
     Base.query conn (fromQuery text)
 
     result <- Base.storeResult conn
