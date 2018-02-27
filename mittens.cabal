@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c6a2aa86fe60d5c2325a0453e322057b3e1f6fda1fe5bc573fb103696f05a72d
+-- hash: ceebd998aa5df152c70c047999fa1560fa1dfe7fa1f604f525cca33f5a3cca46
 
 name:           mittens
 version:        0.1.0.0
@@ -39,10 +39,8 @@ executable mittens
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      async
-    , base
+      base
     , bytestring
-    , exceptions
     , fast-logger
     , mittens
     , monad-logger

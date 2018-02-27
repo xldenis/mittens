@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main where
@@ -19,16 +20,16 @@ import           Data.Monoid
 import           Data.Time.Clock
 
 import           Control.Monad
-import           Options.Applicative.Simple
-import           Data.List
 import           Data.Char
+import           Data.List
+import           Options.Applicative.Simple
 
-import           Control.Monad.Logger
 import           Control.Monad.IO.Class
+import           Control.Monad.Logger
 
-import Logger
+import           Logger
 
-data CLI = CLI
+data DBOpts = DB
   { host     :: String
   , port     :: Word16
   , user     :: String
@@ -36,25 +37,37 @@ data CLI = CLI
   , database :: String
   }
 
-cliParser prefix = CLI
+data Global = Opts
+  { interval :: Word32
+  , threads  :: Word32
+  }
+
+cliParser prefix = DB
   <$> strOption   (long (prefix ++ "host"))
   <*> option auto (long (prefix ++ "port") <> value 3306)
   <*> strOption   (long (prefix ++ "user"))
   <*> strOption   (long (prefix ++ "password") <> value "")
   <*> strOption   (long (prefix ++ "database") <> value "")
 
+globalOpts = Opts
+  <$> option auto (long "interval" <> value 1)
+  <*> option auto (long "threads"  <> value 10)
+
 main = do
-  (sourceDB, targetDB) <- execParser (info ((,) <$> cliParser "source-" <*> cliParser "dest-") fullDesc)
+  (sourceDB, targetDB, opts) <- execParser $ info ((,,) <$> cliParser "source-" <*> cliParser "dest-" <*> globalOpts) fullDesc
 
   sourcePool <- createPool (connect $ mkConnectInfo sourceDB) close 1 2 1
-  targetPool <- createPool (connect $ mkConnectInfo targetDB) close 1 15 10
+  targetPool <- createPool (connect $ mkConnectInfo targetDB) close 1 15 (fromIntegral $ threads opts)
 
   times <- newTimeCache simpleTimeFormat
   withTimedFastLogger times (LogStdout defaultBufSize) $ \logger ->
-    runTimedFastLoggerLoggingT logger $ repeatingEvery 1 $ do
-      queries <- withResource sourcePool (getQueries $ database sourceDB)
-      logInfoN . fromString $ "Fetched " <> show (length queries) <> " queries from " <> host sourceDB <> " db " <> database sourceDB
-      mapConcurrently_ (\q -> withResource targetPool $ \conn -> runQuery conn q) queries
+    runTimedFastLoggerLoggingT logger $ repeatingEvery (fromIntegral $ interval opts) $
+      pushQueryBatchToDest sourcePool targetPool sourceDB
+
+pushQueryBatchToDest sourcePool targetPool sourceDb =  do
+  queries <- withResource sourcePool (getQueries $ database sourceDb)
+  logInfoN . fromString $ "Fetched " <> show (length queries) <> " queries from " <> host sourceDb <> " db " <> database sourceDb
+  mapConcurrently_ (\q -> withResource targetPool $ \conn -> runQuery conn q) queries
 
 getQueries :: MonadIO m => String -> Connection -> m [Query]
 getQueries dbName conn = liftIO $ do
@@ -75,9 +88,9 @@ getQueries dbName conn = liftIO $ do
 isReadQuery :: String -> Bool
 isReadQuery str =
   isPrefixOf "select" (map toLower str) &&
-  not (isSuffixOf "..." str)
+  not ("..." `isSuffixOf` str)
 
-mkConnectInfo :: CLI -> ConnectInfo
+mkConnectInfo :: DBOpts -> ConnectInfo
 mkConnectInfo cli =
   defaultConnectInfo
     { connectHost = host cli

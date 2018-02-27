@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings   #-}
 module Logger
-( module Logger
+( runTimedFastLoggerLoggingT
 , newTimeCache
 , simpleTimeFormat
 , withTimedFastLogger
 , LogType(..)
 , defaultBufSize
-)where
+) where
 
 import           System.Log.FastLogger
 import           System.Log.FastLogger.Date
@@ -15,6 +15,12 @@ import qualified Data.Text as T
 import qualified Data.ByteString.Char8 as S8
 import           Control.Monad.Logger
 import           Control.Monad.IO.Class
+
+{-
+  taken from https://github.com/kazu-yamamoto/logger/pull/87
+
+  once the PR is merged this module will be entirely removed
+-}
 
 fileLocStr :: Loc -> String
 fileLocStr loc = (loc_package loc) ++ ':' : (loc_module loc) ++

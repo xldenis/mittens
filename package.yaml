@@ -25,8 +25,6 @@ executables:
     - resource-pool
     - mysql-simple
     - mysql
-    - exceptions
-    - async
     - text
     - mittens
     - optparse-simple
