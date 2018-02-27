@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 1727398ab9b6ecf109e88e38d0bd5d2b6ad8a054ed743098e4a2f5a9e2931e48
+-- hash: c6a2aa86fe60d5c2325a0453e322057b3e1f6fda1fe5bc573fb103696f05a72d
 
 name:           mittens
 version:        0.1.0.0
@@ -41,15 +41,20 @@ executable mittens
   build-depends:
       async
     , base
+    , bytestring
     , exceptions
+    , fast-logger
     , mittens
+    , monad-logger
     , mysql
     , mysql-simple
     , optparse-simple
     , resource-pool
     , text
     , time
+    , unliftio
   other-modules:
+      Logger
       Paths_mittens
   default-language: Haskell2010
 

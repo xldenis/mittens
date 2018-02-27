@@ -7,8 +7,8 @@ import           Data.Pool
 import           Data.String                 (fromString)
 import           Data.Word
 
-import           Control.Concurrent.Async
-import           Control.Exception
+import           UnliftIO.Async
+import           UnliftIO.Exception
 
 import qualified Database.MySQL.Base         as Base
 import           Database.MySQL.Simple
@@ -22,6 +22,11 @@ import           Control.Monad
 import           Options.Applicative.Simple
 import           Data.List
 import           Data.Char
+
+import           Control.Monad.Logger
+import           Control.Monad.IO.Class
+
+import Logger
 
 data CLI = CLI
   { host     :: String
@@ -44,13 +49,15 @@ main = do
   sourcePool <- createPool (connect $ mkConnectInfo sourceDB) close 1 2 1
   targetPool <- createPool (connect $ mkConnectInfo targetDB) close 1 15 10
 
-  repeatingEvery 1 $ do
-    queries <- withResource sourcePool (getQueries $ database sourceDB)
-    putStrLn $ "Fetched " ++ show (length queries) ++ " queries from " ++ host sourceDB ++ " db " ++ database sourceDB
-    mapConcurrently_ (\q -> withResource targetPool $ \conn -> runQuery conn q) queries
+  times <- newTimeCache simpleTimeFormat
+  withTimedFastLogger times (LogStdout defaultBufSize) $ \logger ->
+    runTimedFastLoggerLoggingT logger $ repeatingEvery 1 $ do
+      queries <- withResource sourcePool (getQueries $ database sourceDB)
+      logInfoN . fromString $ "Fetched " <> show (length queries) <> " queries from " <> host sourceDB <> " db " <> database sourceDB
+      mapConcurrently_ (\q -> withResource targetPool $ \conn -> runQuery conn q) queries
 
-getQueries :: String -> Connection -> IO [Query]
-getQueries dbName conn = do
+getQueries :: MonadIO m => String -> Connection -> m [Query]
+getQueries dbName conn = liftIO $ do
   (results :: [Only (Maybe String)]) <- query conn
     "select sql_text \
     \from performance_schema.events_statements_history as esh \
@@ -80,8 +87,8 @@ mkConnectInfo cli =
     , connectDatabase = database cli
     }
 
-runQuery :: Connection -> Query -> IO ()
-runQuery conn text =
+runQuery :: MonadIO m => Connection -> Query -> m ()
+runQuery conn text = liftIO $
   doQuery `catches`
     [ Handler $ \(_ :: FormatError) -> logError
     , Handler $ \(_ :: QueryError)  -> logError
@@ -98,16 +105,16 @@ runQuery conn text =
 
     return ()
 
-repeatingEvery :: NominalDiffTime -> IO () -> IO ()
+repeatingEvery :: (MonadLogger m, MonadIO m) => NominalDiffTime -> m () -> m ()
 repeatingEvery time action = do
-  current <- getCurrentTime
+  current <- liftIO getCurrentTime
   action
-  updated <- getCurrentTime
+  updated <- liftIO getCurrentTime
 
   let diff = diffUTCTime updated current
 
-  putStrLn $ "Queries were replicated in " ++ show diff ++ " seconds."
+  logInfoN $ "Queries were replicated in " <> fromString (show diff) <> " seconds."
 
-  when (time - diff > 0) $ threadDelay (floor $ 10^6 * (time - diff))
+  when (time - diff > 0) $ liftIO $ threadDelay (floor $ 10^6 * (time - diff))
 
   repeatingEvery time action

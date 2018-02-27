@@ -31,6 +31,10 @@ executables:
     - mittens
     - optparse-simple
     - time
+    - monad-logger
+    - fast-logger
+    - bytestring
+    - unliftio
 tests:
   mittens-test:
     main: Spec.hs
