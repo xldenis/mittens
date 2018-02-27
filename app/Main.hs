@@ -21,7 +21,7 @@ import           Data.Time.Clock
 
 import           Control.Monad
 import           Data.Char
-import           Data.List
+-- import           Data.List
 import           Options.Applicative.Simple
 
 import           Control.Monad.IO.Class
@@ -29,6 +29,8 @@ import           Control.Monad.Logger
 
 import           Control.Monad.IO.Unlift
 import           Logger
+import Data.ByteString (ByteString, isSuffixOf)
+import Data.Coerce
 
 data DBOpts = DB
   { host     :: String
@@ -61,34 +63,35 @@ main = do
   targetPool <- createPool (connect $ mkConnectInfo targetDB) close 1 15 (fromIntegral $ threads opts)
 
   times <- newTimeCache simpleTimeFormat
-  withTimedFastLogger times (LogStdout defaultBufSize) $ \logger ->
-    runTimedFastLoggerLoggingT logger $ repeatingEvery (fromIntegral $ interval opts) $
+  do
+  -- withTimedFastLogger times (LogStdout defaultBufSize) $ \logger ->
+    -- runTimedFastLoggerLoggingT logger $
+    repeatingEvery (fromIntegral $ interval opts) $
       pushQueryBatchToDest sourcePool targetPool sourceDB
 
-pushQueryBatchToDest sourcePool targetPool sourceDb =  do
-  queries <- withResource sourcePool (getQueries $ database sourceDb)
-  logInfoN . fromString $ "Fetched " <> show (length queries) <> " queries from " <> host sourceDb <> " db " <> database sourceDb
-  mapConcurrently_ (\q -> withResource targetPool $ \conn -> runQuery conn q) queries
-
+-- pushQueryBatchToDest :: (MonadIO m, MonadUnliftIO m, MonadLogger m) => Pool Connection -> Pool Connection -> DBOpts -> m ()
+pushQueryBatchToDest sourcePool targetPool sourceDb = do
+  (queries, diff) <- elapsedTime $ withResource sourcePool (getQueries $ database sourceDb)
+  -- logInfoN . fromString $ "Fetched " <> show (length queries) <> " queries in " <> fromString (show diff)
+  (_, diff) <- elapsedTime $ mapConcurrently_ (\q -> withResource targetPool $ \conn -> runQuery conn q) queries
+  -- logInfoN $ "Sent queries to dest in " <> fromString (show diff)
+  return ()
 getQueries :: MonadIO m => String -> Connection -> m [Query]
 getQueries dbName conn = liftIO $ do
-  (results :: [Only (Maybe String)]) <- query conn
-    "select sql_text \
-    \from performance_schema.events_statements_history as esh \
-    \join performance_schema.threads on threads.thread_id = esh.thread_id \
-    \where type='foreground' and current_schema = ? and processlist_id != connection_id() \
-    \and event_name='statement/sql/select';"
+  (results :: [Only (Maybe ByteString)]) <- query conn
+    "select sql_text from performance_schema.events_statements_history as esh \
+    \where current_schema = ? and event_name='statement/sql/select';"
     (Only dbName)
 
   let queries = mapMaybe fromOnly results
       readQueries = filter isReadQuery queries
 
-  return $ map fromString readQueries
+  return $ map coerce readQueries
 
 -- | Shitty filter to identify read only queries, for now assume all selects are read-only.
-isReadQuery :: String -> Bool
+isReadQuery :: ByteString -> Bool
 isReadQuery str =
-  isPrefixOf "select" (map toLower str) &&
+  -- isPrefixOf "select" (map toLower str) &&
   not ("..." `isSuffixOf` str)
 
 mkConnectInfo :: DBOpts -> ConnectInfo
@@ -101,33 +104,34 @@ mkConnectInfo cli =
     , connectDatabase = database cli
     }
 
-runQuery :: (MonadIO m, MonadUnliftIO m, MonadLogger m) => Connection -> Query -> m ()
+runQuery :: (MonadIO m, MonadUnliftIO m) => Connection -> Query -> m ()
 runQuery conn text =
   doQuery `catches`
     [ Handler $ \(e :: FormatError) -> logError (show e)
     , Handler $ \(e :: QueryError)  -> logError (show e)
     , Handler $ \(e :: ResultError) -> logError (show e)
-    , Handler $ \(e :: Base.MySQLError)  -> logErrorN . fromString $ "Hit an invalid query: " <> show e
+    , Handler $ \(e :: Base.MySQLError)  -> liftIO $ putStrLn . fromString $ "Hit an invalid query: " <> show e
     ]
   where
-  logError e = logErrorN . fromString $ "omg an error happened!!! " <> e
+  logError e = liftIO $ putStrLn . fromString $ "omg an error happened!!! " <> e
   doQuery = liftIO $ do
     Base.query conn (fromQuery text)
-
-    result <- Base.storeResult conn
-    Base.freeResult result
-
+    Base.useResult conn >>= Base.freeResult
     return ()
 
-repeatingEvery :: (MonadLogger m, MonadIO m) => NominalDiffTime -> m () -> m ()
-repeatingEvery time action = do
+elapsedTime :: MonadIO m => m a -> m (a, NominalDiffTime)
+elapsedTime action = do
   current <- liftIO getCurrentTime
-  action
+  res <- action
   updated <- liftIO getCurrentTime
 
-  let diff = diffUTCTime updated current
+  return $ (res, diffUTCTime updated current)
 
-  logInfoN $ "Queries were replicated in " <> fromString (show diff) <> " seconds."
+repeatingEvery :: (MonadIO m) => NominalDiffTime -> m () -> m ()
+repeatingEvery time action = do
+  (_, diff) <- elapsedTime action
+
+  liftIO $ putStrLn $ "Queries were replicated in " <> fromString (show diff) <> " seconds."
 
   when (time - diff > 0) $ liftIO $ threadDelay (floor $ 10^6 * (time - diff))
 
